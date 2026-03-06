@@ -7,6 +7,8 @@
 /* Helper functions */
 void free_matrix(double** data, int n);
 double** allocate_matrix(int rows, int cols);
+void copy_matrix(double** dst, double** src, int n, int k);
+double frobenius_norm_diff(double** A, double** B, int n, int k);
 
 /* Core algorithm functions */
 double** sym_c(double** data_points, int n, int dim);

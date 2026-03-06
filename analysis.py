@@ -1,10 +1,13 @@
 import sys
+
+from sklearn.metrics import silhouette_score
+
 import symnmf
 import kmeans
-from sklearn.metrics import silhouette_score
 
 
 def read_data(file_name):
+    """Read data points from file and return as a list of lists."""
     data = []
     with open(file_name, "r") as f:
         for line in f:
@@ -14,6 +17,7 @@ def read_data(file_name):
 
 
 def main():
+    """Parse arguments, run SymNMF and KMeans, and print silhouette scores."""
     if len(sys.argv) != 3:
         print("An Error Has Occurred")
         sys.exit(1)
@@ -27,45 +31,34 @@ def main():
 
     data = read_data(file_name)
 
-    # --- SymNMF Analysis ---
     try:
-
         H = symnmf.symnmf(data, k)
-
-        # Derive clusters: returns index of the max element in each row of H
         nmf_labels = [row.index(max(row)) for row in H]
-
         nmf_score = silhouette_score(data, nmf_labels)
         print(f"nmf: {nmf_score:.4f}")
-    except Exception as e:
-        print(f"SymNMF Error: {e}", file=sys.stderr)
+    except Exception:
+        print("An Error Has Occurred")
+        sys.exit(1)
 
-    # --- KMeans Analysis ---
     try:
-        # Run KMeans using your imported kmeans.py module
-        # According to your kmeans.py, the signature is k_means(k, iter_count, data)
-        # Your kmeans.py logic initializes centroids = data[:k] internally
-
         final_centroids = kmeans.k_means(k, 300, data)
 
-        # Assign each point to the closest centroid to get labels
         kmeans_labels = []
         for point in data:
             min_dist = float("inf")
             closest_idx = -1
-
             for i, centroid in enumerate(final_centroids):
                 dist = kmeans.euclidean_distance(point, centroid)
                 if dist < min_dist:
                     min_dist = dist
                     closest_idx = i
-
             kmeans_labels.append(closest_idx)
 
         kmeans_score = silhouette_score(data, kmeans_labels)
         print(f"kmeans: {kmeans_score:.4f}")
-    except Exception as e:
-        print(f"KMeans Error: {e}", file=sys.stderr)
+    except Exception:
+        print("An Error Has Occurred")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

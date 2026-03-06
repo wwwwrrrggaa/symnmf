@@ -4,22 +4,8 @@
 #include <stdio.h>
 #include "symnmf.h"
 
-int is_valid_integer(const char* str)
-{
-    char* endptr;
-    const char* p;
-    if (str == NULL || *str == '\0') return 0;
 
-
-    for (p = str; *p != '\0'; p++)
-    {
-        if (*p == '.') return 0;
-    }
-
-    strtol(str, &endptr, 10);
-    return (*endptr == '\0');
-}
-
+/* Frees all rows and the outer pointer of a matrix of n rows. */
 void free_matrix(double** data, int n)
 {
     int i;
@@ -36,6 +22,7 @@ void free_matrix(double** data, int n)
     }
 }
 
+/* Allocates and returns a rows x cols matrix of doubles, or NULL on failure. */
 double** allocate_matrix(int rows, int cols)
 {
     double** matrix;
@@ -57,6 +44,7 @@ double** allocate_matrix(int rows, int cols)
     return matrix;
 }
 
+/* Returns the squared Euclidean distance between two dim-dimensional points. */
 double squared_euclidean_distance(double* point1, double* point2, int dim)
 {
     int i;
@@ -70,10 +58,11 @@ double squared_euclidean_distance(double* point1, double* point2, int dim)
     return sum;
 }
 
+/* Computes and returns the n x n similarity matrix A from data_points. */
 double** sym_c(double** data_points, int n, int dim)
 {
-    double** A = allocate_matrix(n, n);
     int i, j;
+    double** A = allocate_matrix(n, n);
     if (!A) return NULL;
     for (i = 0; i < n; i++)
     {
@@ -92,11 +81,12 @@ double** sym_c(double** data_points, int n, int dim)
     return A;
 }
 
+/* Computes and returns the n x n diagonal degree matrix D from similarity matrix A. */
 double** ddg_c(double** A, int n)
 {
-    double** D = allocate_matrix(n, n);
     double sum;
-    int i,j;
+    int i, j;
+    double** D = allocate_matrix(n, n);
     if (!D) return NULL;
     for (i = 0; i < n; i++)
     {
@@ -114,10 +104,11 @@ double** ddg_c(double** A, int n)
     return D;
 }
 
+/* Computes and returns the normalized similarity matrix W from A and D. */
 double** norm_c(double** A, double** D, int n)
 {
+    int i, j;
     double** W = allocate_matrix(n, n);
-    int i,j;
     if (!W) return NULL;
     for (i = 0; i < n; i++)
     {
@@ -129,6 +120,7 @@ double** norm_c(double** A, double** D, int n)
     return W;
 }
 
+/* Stores the transpose of matrix (n x d) into transposed (d x n). */
 void transpose(double** transposed, double** matrix, int n, int d)
 {
     int i, j;
@@ -141,8 +133,10 @@ void transpose(double** transposed, double** matrix, int n, int d)
     }
 }
 
+/* Multiplies matrix A (rowsA x colsA) by B (colsA x colsB) and stores result in res. */
 void matrix_multiply(double** res, double** A, double** B, int rowsA, int colsA, int colsB)
-{   int i,j,k;
+{
+    int i, j, k;
     for (i = 0; i < rowsA; i++)
     {
         for (j = 0; j < colsB; j++)
@@ -156,6 +150,7 @@ void matrix_multiply(double** res, double** A, double** B, int rowsA, int colsA,
     }
 }
 
+/* Performs one SymNMF update step, writing the new H into H from H_prev and W. */
 void symnmf_iter(double** H, double** H_prev, double** W, double** HHH, double** HT, double** HHT, double** WH,
                  int n, int k)
 {
@@ -181,72 +176,85 @@ void symnmf_iter(double** H, double** H_prev, double** W, double** HHH, double**
     }
 }
 
-double** symnmf_c(double** H, double** W, int n, int k, int max_iter, double eps)
+/* Copies all entries from src into dst (both n x k). */
+void copy_matrix(double** dst, double** src, int n, int k)
 {
-    double** H_prev = allocate_matrix(n, k);
-    double** HHH = allocate_matrix(n, k);
-    double** HT = allocate_matrix(k, n);
-    double** HHT = allocate_matrix(n, n);
-    double** WH = allocate_matrix(n, k);
-    double f_norm, diff;
-    int i,j,iter;
-
-    if (!H_prev || !HHH || !HT || !HHT || !WH)
+    int i, j;
+    for (i = 0; i < n; i++)
     {
-        free_matrix(H_prev, n);
-        free_matrix(HHH, n);
-        free_matrix(HT, k);
-        free_matrix(HHT, n);
-        free_matrix(WH, n);
-        return NULL;
-    }
-
-    for (iter = 0; iter < max_iter; iter++)
-    {
-        for (i = 0; i < n; i++)
+        for (j = 0; j < k; j++)
         {
-            for (j = 0; j < k; j++)
-            {
-                H_prev[i][j] = H[i][j];
-            }
-        }
-
-        symnmf_iter(H, H_prev, W, HHH, HT, HHT, WH, n, k);
-
-        f_norm = 0.0;
-
-        for (i = 0; i < n; i++)
-        {
-            for (j = 0; j < k; j++)
-            {
-                diff = H[i][j] - H_prev[i][j];
-                f_norm += diff * diff;
-            }
-        }
-
-
-        if (f_norm < eps)
-        {
-            break;
+            dst[i][j] = src[i][j];
         }
     }
+}
 
+/* Returns the squared Frobenius norm of the difference (A - B) for n x k matrices. */
+double frobenius_norm_diff(double** A, double** B, int n, int k)
+{
+    double sum = 0.0, diff;
+    int i, j;
+    for (i = 0; i < n; i++)
+    {
+        for (j = 0; j < k; j++)
+        {
+            diff = A[i][j] - B[i][j];
+            sum += diff * diff;
+        }
+    }
+    return sum;
+}
+
+/* Frees the five temporary matrices used in symnmf_c. */
+void free_temp_matrices(double** H_prev, double** HHH, double** HT,
+                        double** HHT, double** WH, int n, int k)
+{
     free_matrix(H_prev, n);
     free_matrix(HHH, n);
     free_matrix(HT, k);
     free_matrix(HHT, n);
     free_matrix(WH, n);
+}
 
+/* Runs SymNMF optimization on H using W for up to max_iter iterations or until convergence within eps. */
+double** symnmf_c(double** H, double** W, int n, int k, int max_iter, double eps)
+{
+    int iter;
+    double** H_prev = allocate_matrix(n, k);
+    double** HHH = allocate_matrix(n, k);
+    double** HT = allocate_matrix(k, n);
+    double** HHT = allocate_matrix(n, n);
+    double** WH = allocate_matrix(n, k);
+
+    if (!H_prev || !HHH || !HT || !HHT || !WH)
+    {
+        free_temp_matrices(H_prev, HHH, HT, HHT, WH, n, k);
+        return NULL;
+    }
+
+    for (iter = 0; iter < max_iter; iter++)
+    {
+        copy_matrix(H_prev, H, n, k);
+        symnmf_iter(H, H_prev, W, HHH, HT, HHT, WH, n, k);
+        if (frobenius_norm_diff(H, H_prev, n, k) < eps)
+            break;
+    }
+
+    free_temp_matrices(H_prev, HHH, HT, HHT, WH, n, k);
     return H;
 }
 
+/* Returns 1 if str is one of the valid goal strings, 0 otherwise. */
 int is_valid_goal(const char* str)
 {
     return strcmp(str, "sym") == 0 || strcmp(str, "ddg") == 0 ||
-           strcmp(str, "norm") == 0 || strcmp(str, "symnmf") == 0;
+           strcmp(str, "norm") == 0;
 }
+
+/* Returns 1 if str is an existing .txt file path, 0 otherwise. */
 int is_valid_file_name(const char* str)
-{   FILE* file;
+{
+    FILE* file;
     if (strlen(str) < 4 || strcmp(str + strlen(str) - 4, ".txt") != 0)
     {
         return 0;
@@ -260,23 +268,13 @@ int is_valid_file_name(const char* str)
     return 0;
 }
 
-double** read_points(const char* file_name, int* n, int* d)
+/* Counts the number of rows and columns in file_name, storing in n and d. */
+int count_file_dims(const char* file_name, int* n, int* d)
 {
-    int rows = 0;
-    int cols = 1; /* Assuming at least one column */
-    char c;
-    int first_line = 1;
-    double** data_points;
-    int i, j;
-    FILE* file;
-
-    /* Removed premature assignment of *n and *d here */
-
-    file = fopen(file_name, "r");
-    if (!file)
-    {
-        return NULL;
-    }
+    int rows = 0, cols = 1, first_line = 1;
+    int c;
+    FILE* file = fopen(file_name, "r");
+    if (!file) return 0;
 
     while ((c = fgetc(file)) != EOF)
     {
@@ -290,24 +288,30 @@ double** read_points(const char* file_name, int* n, int* d)
             cols++;
         }
     }
-
-    /* Assign calculated dimensions to output pointers here */
+    fclose(file);
     *n = rows;
     *d = cols;
+    return 1;
+}
 
-    rewind(file);
+/* Reads data points from file_name into a matrix, setting n and d for dimensions. */
+double** read_points(const char* file_name, int* n, int* d)
+{
+    double** data_points;
+    int i, j;
+    FILE* file;
 
-    data_points = allocate_matrix(rows, cols);
+    if (!count_file_dims(file_name, n, d)) return NULL;
 
-    if (!data_points)
+    file = fopen(file_name, "r");
+    if (!file) return NULL;
+
+    data_points = allocate_matrix(*n, *d);
+    if (!data_points) { fclose(file); return NULL; }
+
+    for (i = 0; i < *n; i++)
     {
-        fclose(file);
-        return NULL;
-    }
-
-    for (i = 0; i < rows; i++)
-    {
-        for (j = 0; j < cols; j++)
+        for (j = 0; j < *d; j++)
         {
             if (fscanf(file, "%lf", &data_points[i][j]) != 1)
             {
@@ -315,11 +319,7 @@ double** read_points(const char* file_name, int* n, int* d)
                 fclose(file);
                 return NULL;
             }
-
-            if (j < cols - 1)
-            {
-                fgetc(file);
-            }
+            if (j < *d - 1) fgetc(file);
         }
     }
 
@@ -327,10 +327,11 @@ double** read_points(const char* file_name, int* n, int* d)
     return data_points;
 }
 
-
+/* Prints an n x d matrix with values formatted to 4 decimal places. */
 void print_matrix(double** data_points, int n, int d)
-{   int i, j;
-    for (i = 0; i < n;i++)
+{
+    int i, j;
+    for (i = 0; i < n; i++)
     {
         for (j = 0; j < d; j++)
         {
@@ -344,9 +345,12 @@ void print_matrix(double** data_points, int n, int d)
     }
 }
 
-double** perform_goal(double** data_points,int n,int dim,char *goal)
+/* Computes and returns the result matrix for the given goal using data_points. */
+double** perform_goal(double** data_points, int n, int dim, char* goal)
 {
-    double **A, **D, **W;
+    double** A;
+    double** D;
+    double** W;
     if (strcmp(goal, "sym") == 0)
     {
         return sym_c(data_points, n, dim);
@@ -364,7 +368,8 @@ double** perform_goal(double** data_points,int n,int dim,char *goal)
         A = sym_c(data_points, n, dim);
         if (!A) return NULL;
         D = ddg_c(A, n);
-        if (!D) {
+        if (!D)
+        {
             free_matrix(A, n);
             return NULL;
         }
@@ -373,48 +378,53 @@ double** perform_goal(double** data_points,int n,int dim,char *goal)
         free_matrix(D, n);
         return W;
     }
-
 }
 
+/* Validates command-line arguments: checks argc, goal, and file name. */
+int validate_args(int argc, char** argv)
+{
+    if (argc != 3) return 0;
+    if (!is_valid_goal(argv[1])) return 0;
+    if (!is_valid_file_name(argv[2])) return 0;
+    return 1;
+}
 
+/* Entry point: validates arguments, reads data, performs goal, and prints the result. */
 int main(int argc, char** argv)
 {
-    char* input_file;
     char* goal;
-    int n,d;
-    double** data_points,**output;
+    char* input_file;
+    int n, d;
+    double** data_points;
+    double** output;
 
-    if (argc != 3)
+    if (!validate_args(argc, argv))
     {
         printf("An Error Has Occurred\n");
-
         return 1;
     }
 
     goal = argv[1];
     input_file = argv[2];
-    if (!is_valid_goal(goal))
-    {
-        printf("An Error Has Occurred\n");
-        return 1;
-    }
-    if (!is_valid_file_name(input_file))
-    {
-        printf("An Error Has Occurred\n");
-        return 1;
-    }
     data_points = read_points(input_file, &n, &d);
 
-    if (data_points == NULL) {
+    if (data_points == NULL)
+    {
         printf("An Error Has Occurred\n");
         return 1;
     }
 
-    output=perform_goal(data_points, n, d, goal);
+    output = perform_goal(data_points, n, d, goal);
+    if (!output)
+    {
+        free_matrix(data_points, n);
+        printf("An Error Has Occurred\n");
+        return 1;
+    }
+
     print_matrix(output, n, n);
     free_matrix(data_points, n);
     free_matrix(output, n);
-
 
 
 
